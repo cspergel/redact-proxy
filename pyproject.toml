@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "redact-proxy"
-version = "0.1.0"
+version = "0.1.1"
 description = "The ngrok for PHI. HIPAA-compliant wrappers for LLM APIs."
 readme = "README.md"
 license = "MIT"
@@ -71,7 +71,7 @@ all = [
 
 [project.urls]
 Homepage = "https://redact.health"
-Documentation = "https://docs.redact.health/proxy"
+Documentation = "https://github.com/cspergel/redact-proxy#readme"
 Repository = "https://github.com/cspergel/redact-proxy"
 Issues = "https://github.com/cspergel/redact-proxy/issues"
 
