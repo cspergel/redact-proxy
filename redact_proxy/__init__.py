@@ -33,7 +33,7 @@ Installation:
     pip install redact-proxy[all]             # Everything
 """
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 from .openai_wrapper import OpenAI
 from .anthropic_wrapper import Anthropic

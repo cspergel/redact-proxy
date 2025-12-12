@@ -12,6 +12,7 @@ from typing import List, Dict, Optional, Tuple
 
 from .models import Finding
 from .patterns import PatternEngine
+from .facilities import detect_facilities
 
 
 class PHIDetector:
@@ -81,12 +82,22 @@ class PHIDetector:
         return result, findings
 
     def _detect_fast(self, text: str) -> List[Finding]:
-        """Fast detection using patterns only."""
-        return self._pattern_engine.detect(text)
+        """Fast detection using patterns + facility wordlist."""
+        findings = self._pattern_engine.detect(text)
+
+        # Add facility findings
+        facility_findings = detect_facilities(text)
+        findings.extend(facility_findings)
+
+        return self._deduplicate(findings)
 
     def _detect_balanced(self, text: str) -> List[Finding]:
-        """Balanced detection using patterns + Presidio."""
+        """Balanced detection using patterns + facilities + Presidio."""
         findings = self._pattern_engine.detect(text)
+
+        # Add facility findings
+        facility_findings = detect_facilities(text)
+        findings.extend(facility_findings)
 
         # Add Presidio findings
         presidio_findings = self._detect_presidio(text)
@@ -95,8 +106,12 @@ class PHIDetector:
         return self._deduplicate(findings)
 
     def _detect_accurate(self, text: str) -> List[Finding]:
-        """Accurate detection using patterns + Presidio + transformer."""
+        """Accurate detection using patterns + facilities + Presidio + transformer."""
         findings = self._pattern_engine.detect(text)
+
+        # Add facility findings
+        facility_findings = detect_facilities(text)
+        findings.extend(facility_findings)
 
         # Add Presidio findings
         presidio_findings = self._detect_presidio(text)

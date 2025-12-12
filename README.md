@@ -104,6 +104,7 @@ client = OpenAI(phi_detection="accurate")  # Best accuracy
 - **Email addresses**
 - **Addresses**: Street, city, state, ZIP
 - **URLs and IP addresses**
+- **Facilities**: 5,286 US hospitals + 12,130 skilled nursing facilities (from CMS)
 
 ## Advanced Usage
 
@@ -141,6 +142,19 @@ print(redacted_text)  # "Patient [NAME], DOB [DATE]"
 3. **Fast**: Pattern-based detection in milliseconds
 4. **Configurable**: Choose speed vs accuracy tradeoff
 5. **Comprehensive**: Covers all 18 HIPAA Safe Harbor identifiers
+
+## Regional Focus
+
+⚠️ **This tool is optimized for USA healthcare data and HIPAA compliance.**
+
+Detection patterns are designed for:
+- US date formats (MM/DD/YYYY)
+- US phone numbers
+- Social Security Numbers
+- US Medicare/Medicaid IDs
+- US healthcare facility names (CMS hospital and SNF databases)
+
+European identifiers (NHS numbers, EU date formats, GDPR-specific PII) are not currently supported. Contributions welcome!
 
 ## License
 
