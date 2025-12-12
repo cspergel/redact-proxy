@@ -1332,7 +1332,7 @@ class PatternEngine:
                 pattern=re.compile(
                     r"(?:Medicare|Medicaid|MBI|HICN)\s*"
                     r"(?:(?:ID|Number|No\.?|#)\s*)?[:#]?\s*"
-                    r"([A-Z0-9]{10,12})",
+                    r"([A-Z0-9][-A-Z0-9]{8,13}[A-Z0-9])",
                     re.IGNORECASE
                 ),
                 phi_type="MEDICARE_ID",
