@@ -159,16 +159,79 @@ print(redacted_text)  # "Patient [NAME], DOB [DATE]"
 4. **Configurable**: Choose speed vs accuracy tradeoff
 5. **Comprehensive**: Covers all 18 HIPAA Safe Harbor identifiers
 
-## Security Considerations
+## Security Model
 
-Redact Proxy redacts PHI from LLM requests, but other parts of your application can still leak PHI:
+- **Where redaction happens**: In-process, in your application's memory. No external service calls.
+- **What leaves your machine**: Only the redacted text goes to the LLM provider. Original PHI stays local.
+- **PHI↔placeholder mapping**: Stored in memory only, per-request. Not persisted to disk. Cleared after request completes.
+- **Logging**: Disabled by default. If you enable debug logging, ensure logs are stored securely.
+- **Threat model**: This tool redacts PHI from LLM API calls. Your application's own logs, error traces, analytics, and caches can still leak PHI—review your full data flow.
 
-- **Application logs**: Your logging framework may capture request/response bodies
-- **Exception traces**: Stack traces may include PHI from variables
-- **Analytics/APM tools**: Request payloads sent to monitoring services
-- **LLM response caching**: If you cache responses, ensure the cache is secure
+## Common Pitfalls
 
-Redacting the LLM call is one layer—review your full data flow.
+These scenarios can leak PHI even when using Redact Proxy:
+
+| Pitfall | Risk | Mitigation |
+|---------|------|------------|
+| **Streaming responses** | PHI in streamed chunks bypasses redaction | Redact after full response is assembled |
+| **Tool/function calling** | Function arguments may contain PHI | Redact tool inputs before passing to LLM |
+| **Retries & error handling** | Stack traces expose PHI in variables | Scrub exceptions before logging |
+| **Background jobs** | Async workers may bypass the proxy | Use Redact Proxy in worker code too |
+| **Prompt caching** | Cached prompts aren't re-redacted | Cache only redacted prompts |
+| **LLM response content** | Model may echo back inferred PHI | Review responses if PHI context was provided |
+
+## Framework Examples
+
+### FastAPI
+
+```python
+from fastapi import FastAPI, Request
+from redact_proxy import OpenAI
+
+app = FastAPI()
+client = OpenAI(phi_detection="fast")
+
+@app.post("/chat")
+async def chat(request: Request):
+    body = await request.json()
+
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": body["message"]}]
+    )
+
+    return {"response": response.choices[0].message.content}
+```
+
+### Next.js API Route
+
+```typescript
+// app/api/chat/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function POST(request: NextRequest) {
+  const { message } = await request.json();
+
+  // Call your Python backend with Redact Proxy
+  const response = await fetch('http://localhost:8000/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message }),
+  });
+
+  const data = await response.json();
+  return NextResponse.json(data);
+}
+```
+
+```python
+# Python backend (FastAPI) - handles the actual LLM call
+from redact_proxy import OpenAI
+
+client = OpenAI(phi_detection="fast")
+
+# ... same as FastAPI example above
+```
 
 ## License
 
