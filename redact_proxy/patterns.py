@@ -63,6 +63,12 @@ class PatternEngine:
                     extract_group = True
                 elif pattern_def.phi_type == "PROVIDER_NAME" and "clinical context" in pattern_def.description:
                     extract_group = True
+                # Dietitian and Impression By signatures - extract just the name
+                elif pattern_def.phi_type == "PROVIDER_NAME" and "signature" in pattern_def.description:
+                    extract_group = True
+                # Username patterns with labels - extract just the username
+                elif pattern_def.phi_type == "USERNAME" and ("signature" in pattern_def.description or "Labeled" in pattern_def.description):
+                    extract_group = True
                 # ROOM_BED patterns have labeled prefixes like "ROOM/BED:", "UNIT #:"
                 elif pattern_def.phi_type == "ROOM_BED":
                     extract_group = True
@@ -187,6 +193,16 @@ class PatternEngine:
                 confidence=0.88,
                 description="Name followed by medical credentials"
             ),
+            # Provider name with space before comma: "Ian Simpson , PAC"
+            PatternDefinition(
+                pattern=re.compile(
+                    r"\b([A-Z][a-z]+\s+[A-Z][a-z]+)\s+,\s*"
+                    r"(PAC|PA-C|PA|NP|RN|MD|DO)\b"
+                ),
+                phi_type="PROVIDER_NAME",
+                confidence=0.88,
+                description="Provider with spaced comma"
+            ),
             # Dietitian signature: "Dietitian name: Annette T Maher, RD"
             PatternDefinition(
                 pattern=re.compile(
@@ -255,6 +271,16 @@ class PatternEngine:
                 confidence=0.88,
                 validator=self._validate_uppercase_name,
                 description="Uppercase LAST, FIRST name format"
+            ),
+            # Mixed case name: "RITCHOTTE, Heather E" or "BROWN, ELIZABETH"
+            PatternDefinition(
+                pattern=re.compile(
+                    r"\b([A-Z]{2,15})\s*,\s*([A-Z][a-z]+)(?:\s+[A-Z])?\b"
+                ),
+                phi_type="PATIENT_NAME",
+                confidence=0.88,
+                validator=self._validate_uppercase_name,
+                description="Mixed case LAST, First name format"
             ),
             PatternDefinition(
                 pattern=re.compile(
@@ -583,10 +609,15 @@ class PatternEngine:
         if any(ind in context for ind in patient_indicators):
             return True
 
-        # Accept if followed immediately by MRN
+        # Accept if followed immediately by MRN or DOB
         end = min(len(text), match.end() + 40)
         after = text[match.end():end].lower()
         if 'mrn:' in after or 'mrn ' in after:
+            return True
+        if 'dob:' in after or 'dob ' in after:
+            return True
+        # Account number context (eClinical format)
+        if 'acc no' in after or 'account' in after:
             return True
 
         # Default: reject without clear context
@@ -661,6 +692,19 @@ class PatternEngine:
                 confidence=0.98,
                 description="DOB with written month"
             ),
+            # Year-only dates in medical history context: "(2019)", "(2021)", "in 2019"
+            PatternDefinition(
+                pattern=re.compile(
+                    r"(?:\(|in\s+|since\s+|from\s+)"
+                    r"((?:19|20)\d{2})"
+                    r"(?:\)|,|\s|$)",
+                    re.IGNORECASE
+                ),
+                phi_type="DATE",
+                confidence=0.82,
+                validator=self._validate_year_date,
+                description="Year-only date in context"
+            ),
         ]
 
     def _validate_us_date(self, text: str, match: re.Match) -> bool:
@@ -682,6 +726,38 @@ class PatternEngine:
             return True
         except (ValueError, IndexError):
             return False
+
+    def _validate_year_date(self, text: str, match: re.Match) -> bool:
+        """Validate year-only dates in medical history context."""
+        year = int(match.group(1))
+
+        # Reasonable medical history years (1950-2030)
+        if not (1950 <= year <= 2030):
+            return False
+
+        # Check context - should be in medical history, not a reference number
+        start = max(0, match.start() - 80)
+        end = min(len(text), match.end() + 40)
+        context = text[start:end].lower()
+
+        # Reject if looks like a reference/code context
+        code_indicators = ['ref', 'code', 'icd', 'cpt', 'version', 'v.', 'edition']
+        if any(ind in context for ind in code_indicators):
+            return False
+
+        # Accept if in medical history context
+        history_indicators = ['s/p', 'status post', 'history', 'diagnosed', 'surgery',
+                            'procedure', 'admitted', 'hospitalized', 'onset', 'since',
+                            'cabg', 'mvr', 'avr', 'stent', 'ablation', 'cardioversion']
+        if any(ind in context for ind in history_indicators):
+            return True
+
+        # Accept if in parentheses (common medical history format)
+        matched_text = match.group()
+        if '(' in matched_text or ')' in text[match.end():match.end()+2]:
+            return True
+
+        return False
 
     def _validate_short_date(self, text: str, match: re.Match) -> bool:
         """
@@ -995,6 +1071,16 @@ class PatternEngine:
                 confidence=0.95,
                 validator=lambda text, match: any(c.isdigit() for c in match.group(1)),
                 description="MRN with label"
+            ),
+            # eClinical Account Number format: "Account Number: 61852"
+            PatternDefinition(
+                pattern=re.compile(
+                    r"Account\s*Number\s*[:#]?\s*(\d{4,8})\b",
+                    re.IGNORECASE
+                ),
+                phi_type="MRN",
+                confidence=0.92,
+                description="Account number label"
             ),
             PatternDefinition(
                 pattern=re.compile(r"\b([EZ]\d{7,10})\b"),
@@ -1486,11 +1572,11 @@ class PatternEngine:
             PatternDefinition(
                 pattern=re.compile(
                     r"(?:Impression|Interpreted|Read)\s+By\s*:\s*"
-                    r"(PH[A-Z0-9]{4,8})\s*[-]"
+                    r"(PH[A-Z0-9]{4,8})\s*-"
                 ),
                 phi_type="USERNAME",
                 confidence=0.90,
-                description="EHR user code in signature"
+                description="EHR user code signature"  # "signature" enables group extraction
             ),
             # Authored by / Created by patterns
             PatternDefinition(
@@ -1502,5 +1588,30 @@ class PatternEngine:
                 phi_type="USERNAME",
                 confidence=0.88,
                 description="Author username"
+            ),
+            # Generic ID patterns - catch 5-12 char alphanumeric strings after ID-like labels
+            # Covers: "User ID: ABC123", "Login: jsmith01", "ID: X12345678"
+            PatternDefinition(
+                pattern=re.compile(
+                    r"(?:User\s*ID|Login\s*ID|Login|Account\s*ID|Staff\s*ID|"
+                    r"Employee\s*ID|Badge\s*ID|System\s*ID|Session\s*ID)\s*[:#]?\s*"
+                    r"([A-Za-z0-9._-]{5,12})\b",
+                    re.IGNORECASE
+                ),
+                phi_type="USERNAME",
+                confidence=0.88,
+                description="Generic ID label"
+            ),
+            # Operator/technician ID patterns - require explicit separator
+            PatternDefinition(
+                pattern=re.compile(
+                    r"(?:Operator|Technician|Tech\b|Clerk)\s+"
+                    r"(?:ID|Code|#)?\s*[:#]\s*"
+                    r"([A-Za-z0-9]{4,10})\b",
+                    re.IGNORECASE
+                ),
+                phi_type="USERNAME",
+                confidence=0.85,
+                description="Operator ID"
             ),
         ]
