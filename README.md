@@ -2,7 +2,9 @@
 
 **The ngrok for PHI.**
 
-Drop-in replacements for OpenAI, Anthropic, and Gemini SDKs that automatically redact PHI before sending to the API.
+Drop-in replacements for OpenAI, Anthropic, and Gemini SDKs that automatically redact PHI before sending to the API. Helps keep PHI out of LLM calls.
+
+> **You still use your existing OpenAI/Anthropic/Gemini API keys.** Redact Proxy runs locally—no Redact API keys, no signup, no data leaves your machine except to your chosen LLM provider.
 
 ## Installation
 
@@ -22,15 +24,21 @@ pip install redact-proxy[accurate]   # Adds transformer model
 pip install redact-proxy[all]
 ```
 
+## Limitations
+
+⚠️ **USA / HIPAA focus**: Detection patterns are optimized for US healthcare data—US date formats, SSNs, US phone numbers, Medicare/Medicaid IDs, and US facility names. European identifiers (NHS numbers, EU formats, GDPR-specific PII) are not currently supported.
+
+⚠️ **Not a guarantee**: This tool reduces risk but does not eliminate it. False negatives are possible. It does not provide BAAs, does not secure your application logs, and is not a substitute for a full compliance program.
+
 ## Quick Start
 
 ### OpenAI
 
 ```python
-# Before (not HIPAA-safe)
+# Before (PHI may be sent to LLM)
 from openai import OpenAI
 
-# After (HIPAA-safe) - just change the import!
+# After (PHI redacted locally before sending) - just change the import!
 from redact_proxy import OpenAI
 
 client = OpenAI(phi_detection="fast")
@@ -76,6 +84,14 @@ response = client.generate_content(
 chat = client.start_chat()
 response = chat.send_message("Patient John Smith has diabetes")
 ```
+
+## How It Works
+
+1. **Detect** — Scans your message for PHI (names, dates, SSNs, etc.) using pattern matching and optional NER
+2. **Replace** — Substitutes PHI with placeholders like `[NAME]`, `[DATE]`, `[SSN]`
+3. **Forward** — Sends the redacted request to your LLM provider using your existing API key
+
+All processing happens locally. The LLM never sees the original PHI.
 
 ## Detection Modes
 
@@ -143,18 +159,16 @@ print(redacted_text)  # "Patient [NAME], DOB [DATE]"
 4. **Configurable**: Choose speed vs accuracy tradeoff
 5. **Comprehensive**: Covers all 18 HIPAA Safe Harbor identifiers
 
-## Regional Focus
+## Security Considerations
 
-⚠️ **This tool is optimized for USA healthcare data and HIPAA compliance.**
+Redact Proxy redacts PHI from LLM requests, but other parts of your application can still leak PHI:
 
-Detection patterns are designed for:
-- US date formats (MM/DD/YYYY)
-- US phone numbers
-- Social Security Numbers
-- US Medicare/Medicaid IDs
-- US healthcare facility names (CMS hospital and SNF databases)
+- **Application logs**: Your logging framework may capture request/response bodies
+- **Exception traces**: Stack traces may include PHI from variables
+- **Analytics/APM tools**: Request payloads sent to monitoring services
+- **LLM response caching**: If you cache responses, ensure the cache is secure
 
-European identifiers (NHS numbers, EU date formats, GDPR-specific PII) are not currently supported. Contributions welcome!
+Redacting the LLM call is one layer—review your full data flow.
 
 ## License
 
