@@ -49,3 +49,6 @@ pip-delete-this-directory.txt
 
 # Personal notes (don't commit)
 Personal_set_up.md
+
+# Claude Code
+.claude/
