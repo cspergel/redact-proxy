@@ -71,7 +71,7 @@ all = [
 
 [project.urls]
 Homepage = "https://redact.health"
-Documentation = "https://github.com/cspergel/redact-proxy#readme"
+"Product Page" = "https://www.redact.health/redact-proxy"
 Repository = "https://github.com/cspergel/redact-proxy"
 Issues = "https://github.com/cspergel/redact-proxy/issues"
 

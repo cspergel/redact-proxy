@@ -242,5 +242,6 @@ Accurate mode: ~500ms+ per request
 ## Links
 
 - Website: [redact.health](https://redact.health)
-- GitHub: [github.com/redacthealth/redact-proxy](https://github.com/redacthealth/redact-proxy)
-- Issues: [GitHub Issues](https://github.com/redacthealth/redact-proxy/issues)
+- Product Page: [redact.health/redact-proxy](https://www.redact.health/redact-proxy)
+- GitHub: [github.com/cspergel/redact-proxy](https://github.com/cspergel/redact-proxy)
+- Issues: [GitHub Issues](https://github.com/cspergel/redact-proxy/issues)

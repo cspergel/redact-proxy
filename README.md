@@ -163,5 +163,5 @@ MIT
 ## Links
 
 - Website: [redact.health](https://redact.health)
-- Documentation: [docs.redact.health/proxy](https://docs.redact.health/proxy)
-- Issues: [GitHub Issues](https://github.com/redacthealth/redact-proxy/issues)
+- Product Page: [redact.health/redact-proxy](https://www.redact.health/redact-proxy)
+- Issues: [GitHub Issues](https://github.com/cspergel/redact-proxy/issues)
