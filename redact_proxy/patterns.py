@@ -262,6 +262,37 @@ class PatternEngine:
                 validator=self._validate_name_not_location,
                 description="Last, First name format"
             ),
+            # Standalone "First Last" format - match known first names followed by capitalized word
+            # Uses word boundary + lookahead to allow overlapping matches
+            PatternDefinition(
+                pattern=re.compile(
+                    r"\b(John|James|Michael|Robert|David|William|Richard|Joseph|Thomas|"
+                    r"Charles|Christopher|Daniel|Matthew|Anthony|Mark|Donald|Steven|"
+                    r"Paul|Andrew|Joshua|Kenneth|Kevin|Brian|George|Timothy|Ronald|"
+                    r"Edward|Jason|Jeffrey|Ryan|Jacob|Gary|Nicholas|Eric|Jonathan|"
+                    r"Stephen|Larry|Justin|Scott|Brandon|Benjamin|Samuel|Raymond|"
+                    r"Gregory|Frank|Alexander|Patrick|Jack|Dennis|Jerry|Tyler|"
+                    r"Mary|Patricia|Jennifer|Linda|Elizabeth|Barbara|Susan|Jessica|"
+                    r"Sarah|Karen|Lisa|Nancy|Betty|Margaret|Sandra|Ashley|Kimberly|"
+                    r"Emily|Donna|Michelle|Dorothy|Carol|Amanda|Melissa|Deborah|"
+                    r"Stephanie|Rebecca|Sharon|Laura|Cynthia|Kathleen|Amy|Angela|"
+                    r"Shirley|Anna|Brenda|Pamela|Emma|Nicole|Helen|Samantha|"
+                    r"Katherine|Christine|Debra|Rachel|Carolyn|Janet|Catherine|"
+                    r"Maria|Heather|Diane|Ruth|Julie|Olivia|Joyce|Virginia|"
+                    r"Victoria|Kelly|Lauren|Christina|Joan|Evelyn|Judith|Megan|"
+                    r"Andrea|Cheryl|Hannah|Jacqueline|Martha|Gloria|Teresa|Ann|"
+                    r"Sara|Madison|Frances|Kathryn|Janice|Jean|Abigail|Alice|"
+                    r"Judy|Sophia|Grace|Denise|Amber|Doris|Marilyn|Danielle|"
+                    r"Beverly|Isabella|Theresa|Diana|Natalie|Brittany|Charlotte|"
+                    r"Marie|Kayla|Alexis|Lori)\s+"
+                    r"([A-Z][a-z]{1,15})\b",
+                    re.IGNORECASE
+                ),
+                phi_type="PERSON_NAME",
+                confidence=0.88,
+                validator=self._validate_first_last_simple,
+                description="Known first name + Last name"
+            ),
             # Uppercase name format: "FANCIL, CAROLE L" or "MASHRAGI, TEREZA W"
             PatternDefinition(
                 pattern=re.compile(
@@ -423,6 +454,76 @@ class PatternEngine:
         # Brief/document section headers
         "brief", "hospital", "course",
     })
+
+    # Common clinical/document words that should not be treated as first names
+    FIRST_NAME_BLOCKLIST = frozenset({
+        "patient", "subject", "client", "chief", "primary", "secondary",
+        "brief", "acute", "chronic", "major", "minor", "stable", "new",
+        "return", "follow", "routine", "general", "medical", "clinical",
+        "social", "family", "past", "current", "present", "prior",
+        "initial", "final", "subsequent", "recent", "previous",
+        "normal", "abnormal", "positive", "negative",
+    })
+
+    def _validate_first_last_name(self, text: str, match: re.Match) -> bool:
+        """Validate that 'First Last' is a real name using wordlist matching.
+
+        Requires at least one word to be a known name, and neither to be
+        a common medical term or non-name word.
+        """
+        first = match.group(1).lower() if match.lastindex >= 1 else ""
+        last = match.group(2).lower() if match.lastindex >= 2 else ""
+
+        # Reject if first word is a common clinical/document word
+        if first in self.FIRST_NAME_BLOCKLIST:
+            return False
+
+        # Reject if either word is a known medical term
+        if first in self.LAB_AND_MEDICAL_TERMS or last in self.LAB_AND_MEDICAL_TERMS:
+            return False
+
+        # Check if words are known names
+        first_is_firstname = first in FIRST_NAMES_UNAMBIG
+        last_is_lastname = last in LAST_NAMES_UNAMBIG
+
+        # High confidence: first name + last name from wordlists
+        if first_is_firstname and last_is_lastname:
+            return True
+
+        # Medium confidence: known first name + capitalized word (could be unusual last name)
+        if first_is_firstname and len(last) >= 2:
+            return True
+
+        # Medium confidence: capitalized word + known last name
+        if last_is_lastname and len(first) >= 2:
+            return True
+
+        # Reject if neither word is a known name
+        return False
+
+    def _validate_first_last_simple(self, text: str, match: re.Match) -> bool:
+        """Validate that known first name + Last is a real name.
+
+        The first name is already known (from the regex pattern), so we just
+        need to validate the last name isn't a medical term.
+        """
+        last = match.group(2).lower() if match.lastindex >= 2 else ""
+
+        # Reject if last word is a common medical term
+        if last in self.LAB_AND_MEDICAL_TERMS:
+            return False
+
+        # Reject very short last names (likely abbreviations)
+        if len(last) < 2:
+            return False
+
+        # Reject clinical context words that might follow names
+        clinical_suffixes = {'therapy', 'disease', 'syndrome', 'disorder', 'status',
+                            'history', 'exam', 'test', 'level', 'count', 'rate'}
+        if last in clinical_suffixes:
+            return False
+
+        return True
 
     def _validate_name_not_location(self, text: str, match: re.Match) -> bool:
         """Validate that 'Last, First' is not a location or medical term.
